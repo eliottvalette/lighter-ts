@@ -841,22 +841,35 @@ export class SignerClient {
           const isLong = position.sign === 1;
           const positionSize = Math.abs(parseFloat(position.position));
           
-          // Convert position size to base units (multiply by appropriate scale)
-          // For ETH, position is in decimal (0.0030 = 3000 in base units)
-          const baseAmount = Math.floor(positionSize * 1000000); // Scale appropriately
+          // Convert position size to base amount
+          const baseAmount = Math.floor(positionSize * 100000);
           
-          // Get mark price from position_value / position
-          const avgPrice = Math.abs(parseFloat(position.avg_entry_price));
-          const priceInUnits = Math.floor(avgPrice * 100000); // Convert to price units
+          // Get current market price (API returns price in USD, already scaled)
+          let currentPrice = Math.abs(parseFloat(position.avg_entry_price));
+          try {
+            const orderApi = new (await import('../api/order-api')).OrderApi(this.apiClient);
+            const details = await orderApi.getOrderBookDetails({ market_id: position.market_id, depth: 1 }) as any;
+            if (details.order_book_details && details.order_book_details.length > 0) {
+              const marketInfo = details.order_book_details[0];
+              if (marketInfo.last_trade_price) {
+                currentPrice = parseFloat(marketInfo.last_trade_price);
+              }
+            }
+          } catch (priceError) {
+            // Use entry price as fallback
+          }
           
-          // Create market order in opposite direction to close position
+          // avgExecutionPrice should be the price directly (API expects USD value, not scaled)
+          const avgExecutionPrice = Math.floor(currentPrice);
+          
+          // Create market order
           const [tx, apiResponse, err] = await this.createMarketOrder({
             marketIndex: position.market_id,
-            clientOrderIndex: Date.now() + Math.floor(Math.random() * 1000), // Unique index
+            clientOrderIndex: Date.now() + Math.floor(Math.random() * 1000),
             baseAmount: baseAmount,
-            avgExecutionPrice: priceInUnits * 2, // Give enough room for execution
-            isAsk: isLong, // If long position (sign=1), sell to close; if short (sign=-1), buy to close
-            reduceOnly: true // This is a position-closing order
+            avgExecutionPrice: avgExecutionPrice,
+            isAsk: isLong,
+            reduceOnly: true
           });
 
           if (err) {
