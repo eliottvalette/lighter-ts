@@ -1,5 +1,5 @@
 import { ApiClient } from './api-client';
-import { OrderBookParams, TradeParams, CreateOrderParams, CancelOrderParams, PaginationParams } from '../types';
+import { OrderBookParams, TradeParams, CreateOrderParams, CancelOrderParams, PaginationParams, AccountTradeParams } from '../types';
 
 export interface OrderBook {
   market_id: number;
@@ -52,6 +52,40 @@ export interface Trade {
   order_id: string;
   taker_order_id: string;
   maker_order_id: string;
+}
+
+export interface AccountTrade {
+  trade_id: string;
+  tx_hash: string;
+  type: string;
+  market_id: number;
+  size: string;
+  price: string;
+  usd_amount: string;
+  ask_id: string;
+  bid_id: string;
+  ask_account_id: number;
+  bid_account_id: number;
+  is_maker_ask: boolean;
+  block_height: string;
+  timestamp: number;
+  taker_fee?: string;
+  taker_position_size_before?: string;
+  taker_entry_quote_before?: string;
+  taker_initial_margin_fraction_before?: number;
+  taker_position_sign_changed?: boolean;
+  maker_fee?: string;
+  maker_position_size_before?: string;
+  maker_entry_quote_before?: string;
+  maker_initial_margin_fraction_before?: number;
+  maker_position_sign_changed?: boolean;
+}
+
+export interface AccountTradesResponse {
+  code: number;
+  message?: string;
+  next_cursor?: string;
+  trades: AccountTrade[];
 }
 
 export interface ExchangeStats {
@@ -170,6 +204,34 @@ export class OrderApi {
     const response = await this.client.delete<{ success: boolean }>('/api/v1/orders/all', {
       params,
     });
+    return response.data;
+  }
+
+  public async getAccountTrades(params: AccountTradeParams): Promise<AccountTradesResponse> {
+    const queryParams: any = {
+      account_index: params.account_index,
+      auth: params.auth,
+      sort_by: params.sort_by,
+      limit: params.limit,
+    };
+
+    if (params.sort_dir !== undefined) {
+      queryParams.sort_dir = params.sort_dir;
+    }
+    if (params.market_id !== undefined) {
+      queryParams.market_id = params.market_id;
+    }
+    if (params.cursor !== undefined) {
+      queryParams.cursor = params.cursor;
+    }
+    if (params.from !== undefined) {
+      queryParams.from = params.from;
+    }
+    if (params.ask_filter !== undefined) {
+      queryParams.ask_filter = params.ask_filter;
+    }
+
+    const response = await this.client.get<AccountTradesResponse>('/api/v1/trades', queryParams);
     return response.data;
   }
 }

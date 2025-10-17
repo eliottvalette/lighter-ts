@@ -238,6 +238,61 @@ async function main(): Promise<void> {
     console.log('ℹ️  No open positions found to close.\n');
   }
 
+  // Step 6: Fetch account trades
+  console.log('📊 STEP 6: Fetching account trades');
+  console.log('─'.repeat(60));
+
+  try {
+    // Create auth token for trades endpoint
+    const authToken = await client.createAuthTokenWithExpiry();
+    
+    // Set auth header
+    apiClient.setDefaultHeader('authorization', authToken);
+    apiClient.setDefaultHeader('Authorization', authToken);
+
+    // Fetch recent trades (last 20)
+    const tradesResponse = await orderApi.getAccountTrades({
+      account_index: ACCOUNT_INDEX,
+      auth: authToken,
+      sort_by: 'timestamp',
+      sort_dir: 'desc',
+      limit: 20,
+      market_id: BTC_MARKET_INDEX
+    });
+
+    if (tradesResponse.trades && tradesResponse.trades.length > 0) {
+      console.log(`Found ${tradesResponse.trades.length} recent BTC trades:\n`);
+
+      tradesResponse.trades.forEach((trade, index) => {
+        // Determine if this account was buyer or seller
+        const isBuyer = trade.bid_account_id === ACCOUNT_INDEX;
+        const side = isBuyer ? 'BUY' : 'SELL';
+        const role = (isBuyer && !trade.is_maker_ask) || (!isBuyer && trade.is_maker_ask) ? 'MAKER' : 'TAKER';
+        
+        const date = new Date(trade.timestamp);
+        const timeStr = date.toLocaleString();
+
+        console.log(`Trade ${index + 1}:`);
+        console.log(`  Time: ${timeStr}`);
+        console.log(`  Side: ${side} (${role})`);
+        console.log(`  Size: ${trade.size} BTC`);
+        console.log(`  Price: $${parseFloat(trade.price).toFixed(2)}`);
+        console.log(`  Value: $${parseFloat(trade.usd_amount).toFixed(2)}`);
+        console.log(`  TX: ${trade.tx_hash.substring(0, 16)}...`);
+        console.log();
+      });
+
+      if (tradesResponse.next_cursor) {
+        console.log('More trades available (use cursor for pagination)\n');
+      }
+    } else {
+      console.log('No BTC trades found for this account\n');
+    }
+
+  } catch (error: any) {
+    console.error(`❌ Failed to fetch trades: ${error.message}\n`);
+  }
+
   console.log('╔═══════════════════════════════════════════════════════╗');
   console.log('║         Automated Trading Complete                   ║');
   console.log('╚═══════════════════════════════════════════════════════╝\n');
