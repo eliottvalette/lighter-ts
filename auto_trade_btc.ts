@@ -63,11 +63,41 @@ async function main(): Promise<void> {
   // Wait a bit for nonce cache to initialize
   await sleep(2000);
 
-  // Step 1: Set leverage to 10x (SKIPPED - can cause nonce issues)
-  console.log('📊 STEP 1: Leverage check');
+  // Step 1: Set leverage to 10x
+  console.log('📊 STEP 1: Setting leverage');
   console.log('─'.repeat(60));
-  console.log(`ℹ️  Using current leverage settings (target was ${TARGET_LEVERAGE}x)`);
-  console.log('⚠️  Leverage update skipped to avoid nonce conflicts\n');
+  console.log(`Target: ${TARGET_LEVERAGE}x leverage on BTC market`);
+
+  // For 10x leverage: fraction = 1/10 = 0.1, scaled by 10,000 = 1,000
+  const MARGIN_FRACTION_SCALE = 10000;
+  const initialMarginFraction = Math.floor((1 / TARGET_LEVERAGE) * MARGIN_FRACTION_SCALE);
+  const [, leverageTransactionHash, leverageError] = await client.updateLeverage(
+    BTC_MARKET_INDEX, 
+    SignerClient.CROSS_MARGIN_MODE, 
+    initialMarginFraction
+  );
+
+  if (leverageError) {
+    console.error(`❌ Failed to set leverage: ${leverageError}`);
+    console.log(`⚠️  Continuing with current leverage settings...\n`);
+  } else {
+    console.log('✅ Leverage updated successfully!');
+    console.log(`   TX Hash: ${leverageTransactionHash}`);
+    
+    // Wait for leverage update confirmation
+    if (leverageTransactionHash) {
+      try {
+        const confirmedTx = await client.waitForTransaction(leverageTransactionHash, 30000, 1000);
+        console.log('✅ Leverage update confirmed!');
+        console.log(`   Block: ${confirmedTx.block_height}`);
+        console.log(`   Status: ${confirmedTx.status}\n`);
+      } catch {
+        console.log('⏳ Leverage update confirmation pending...\n');
+      }
+    } else {
+      console.log();
+    }
+  }
 
   // Step 2: Get BTC market price and open long position
   console.log('📈 STEP 2: Opening BTC long position');
@@ -206,6 +236,61 @@ async function main(): Promise<void> {
 
   if (closedTransactions.length === 0 && errors.length === 0) {
     console.log('ℹ️  No open positions found to close.\n');
+  }
+
+  // Step 6: Fetch account trades
+  console.log('📊 STEP 6: Fetching account trades');
+  console.log('─'.repeat(60));
+
+  try {
+    // Create auth token for trades endpoint
+    const authToken = await client.createAuthTokenWithExpiry();
+    
+    // Set auth header
+    apiClient.setDefaultHeader('authorization', authToken);
+    apiClient.setDefaultHeader('Authorization', authToken);
+
+    // Fetch recent trades (last 20)
+    const tradesResponse = await orderApi.getAccountTrades({
+      account_index: ACCOUNT_INDEX,
+      auth: authToken,
+      sort_by: 'timestamp',
+      sort_dir: 'desc',
+      limit: 20,
+      market_id: BTC_MARKET_INDEX
+    });
+
+    if (tradesResponse.trades && tradesResponse.trades.length > 0) {
+      console.log(`Found ${tradesResponse.trades.length} recent BTC trades:\n`);
+
+      tradesResponse.trades.forEach((trade, index) => {
+        // Determine if this account was buyer or seller
+        const isBuyer = trade.bid_account_id === ACCOUNT_INDEX;
+        const side = isBuyer ? 'BUY' : 'SELL';
+        const role = (isBuyer && !trade.is_maker_ask) || (!isBuyer && trade.is_maker_ask) ? 'MAKER' : 'TAKER';
+        
+        const date = new Date(trade.timestamp);
+        const timeStr = date.toLocaleString();
+
+        console.log(`Trade ${index + 1}:`);
+        console.log(`  Time: ${timeStr}`);
+        console.log(`  Side: ${side} (${role})`);
+        console.log(`  Size: ${trade.size} BTC`);
+        console.log(`  Price: $${parseFloat(trade.price).toFixed(2)}`);
+        console.log(`  Value: $${parseFloat(trade.usd_amount).toFixed(2)}`);
+        console.log(`  TX: ${trade.tx_hash.substring(0, 16)}...`);
+        console.log();
+      });
+
+      if (tradesResponse.next_cursor) {
+        console.log('More trades available (use cursor for pagination)\n');
+      }
+    } else {
+      console.log('No BTC trades found for this account\n');
+    }
+
+  } catch (error: any) {
+    console.error(`❌ Failed to fetch trades: ${error.message}\n`);
   }
 
   console.log('╔═══════════════════════════════════════════════════════╗');

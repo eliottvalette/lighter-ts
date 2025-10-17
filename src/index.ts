@@ -72,7 +72,9 @@ export type {
   OrderBookOrders,
   Order,
   ExchangeStats,
-  PriceLevel
+  PriceLevel,
+  AccountTrade,
+  AccountTradesResponse
 } from './api/order-api';
 
 // Types from TransactionApi
@@ -100,6 +102,7 @@ export type {
 export type {
   OrderBookParams,
   TradeParams,
+  AccountTradeParams,
   TransactionParams,
   BlockParams,
   PaginationParams,

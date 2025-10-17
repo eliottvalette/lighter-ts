@@ -59,8 +59,20 @@ export interface OrderBookParams {
 }
 
 export interface TradeParams {
-  market_id: number;
+  market_id?: number;
   limit?: number;
+}
+
+export interface AccountTradeParams {
+  account_index: number;
+  auth: string;
+  sort_by: 'block_height' | 'timestamp' | 'trade_id';
+  sort_dir?: 'asc' | 'desc';
+  limit: number;
+  market_id?: number;
+  cursor?: string;
+  from?: number;
+  ask_filter?: number;
 }
 
 export interface CreateOrderParams {
